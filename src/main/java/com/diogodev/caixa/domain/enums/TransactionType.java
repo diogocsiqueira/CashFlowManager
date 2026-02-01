@@ -1,4 +1,4 @@
-package com.diogodev.caixa.domain;
+package com.diogodev.caixa.domain.enums;
 
 public enum TransactionType {
     INCOME,
