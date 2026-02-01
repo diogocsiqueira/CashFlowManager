@@ -1,6 +1,7 @@
 package com.diogodev.caixa.service;
 
 import com.diogodev.caixa.domain.Transaction;
+import com.diogodev.caixa.domain.dto.MonthSummaryResponse;
 import com.diogodev.caixa.domain.dto.TransactionCreateRequest;
 import com.diogodev.caixa.domain.enums.TransactionType;
 import com.diogodev.caixa.repository.TransactionRepository;
@@ -39,7 +40,7 @@ public class TransactionService {
         return transactionRepository.findByDateBetween(start, end);
     }
 
-    public BigDecimal calculateBalance(YearMonth month){
+    public MonthSummaryResponse calculateBalance(YearMonth month){
 
         List<Transaction> transactions = findByMonth(month);
 
@@ -53,7 +54,9 @@ public class TransactionService {
                 .map(Transaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return income.subtract(expense);
+        BigDecimal balance = income.subtract(expense);
+
+        return new MonthSummaryResponse(income, expense, balance);
 
     }
 
