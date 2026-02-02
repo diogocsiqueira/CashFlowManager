@@ -1,6 +1,6 @@
 package com.diogodev.caixa.service;
 
-import com.diogodev.caixa.domain.Transaction;
+import com.diogodev.caixa.domain.model.Transaction;
 import com.diogodev.caixa.domain.dto.MonthSummaryResponse;
 import com.diogodev.caixa.domain.dto.TransactionCreateRequest;
 import com.diogodev.caixa.domain.enums.TransactionType;

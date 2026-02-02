@@ -1,4 +1,4 @@
-package com.diogodev.caixa.domain;
+package com.diogodev.caixa.domain.model;
 
 import com.diogodev.caixa.domain.enums.TransactionType;
 import jakarta.persistence.*;

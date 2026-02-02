@@ -1,6 +1,6 @@
 package com.diogodev.caixa.controller;
 
-import com.diogodev.caixa.domain.Transaction;
+import com.diogodev.caixa.domain.model.Transaction;
 import com.diogodev.caixa.domain.dto.TransactionCreateRequest;
 import com.diogodev.caixa.service.TransactionService;
 import jakarta.validation.Valid;
