@@ -14,7 +14,9 @@ public class CorsConfig implements WebMvcConfigurer {
                         "http://localhost:5173",
                         "https://caixa-front-mu.vercel.app"
                 )
-                .allowedMethods("*")
-                .allowedHeaders("*");
+                .allowedMethods("GET","POST","PUT","PATCH","DELETE","OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

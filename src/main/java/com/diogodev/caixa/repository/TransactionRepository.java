@@ -7,5 +7,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
-    List<Transaction> findByDateBetween(LocalDate start, LocalDate end);
+
+    List<Transaction> findByUser_IdAndDateBetweenOrderByDateDesc(Long userId, LocalDate start, LocalDate end);
+
+    void deleteByIdAndUser_Id(Long id, Long userId);
 }
+
