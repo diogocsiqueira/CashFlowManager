@@ -38,7 +38,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = jwtService.parseClaims(token);
-            String email = claims.get("email", String.class);
 
             Object rolesObj = claims.get("roles");
             Set<String> roles = (rolesObj instanceof Collection<?> col)
@@ -50,15 +49,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .collect(Collectors.toSet());
 
             Long userId = Long.valueOf(claims.getSubject());
-            var authToken = new UsernamePasswordAuthenticationToken(userId, null, authorities);
 
+            // principal = userId (Long), getName() vira "1" (toString)
+            var authToken = new UsernamePasswordAuthenticationToken(userId, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
         } catch (Exception e) {
-            // token inválido: só não autentica
             SecurityContextHolder.clearContext();
+
+            // opcional: ajuda debug (tira em prod se quiser)
+            // res.setHeader("X-Auth-Error", e.getClass().getSimpleName());
         }
 
         chain.doFilter(req, res);
     }
+
 }

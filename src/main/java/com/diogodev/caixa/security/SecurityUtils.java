@@ -7,12 +7,24 @@ public class SecurityUtils {
 
     public static Long currentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getPrincipal() == null) {
-            throw new IllegalStateException("Usuário não autenticado");
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("Sem autenticação");
         }
-        Object p = auth.getPrincipal();
-        if (p instanceof Long id) return id;
-        if (p instanceof String s) return Long.valueOf(s);
-        throw new IllegalStateException("Principal inválido: " + p.getClass().getName());
+
+        Object principal = auth.getPrincipal();
+
+        // teu filtro seta principal = Long userId
+        if (principal instanceof Long id) return id;
+
+        // fallback: se em algum canto virar String
+        if (principal instanceof String s) {
+            try {
+                return Long.parseLong(s);
+            } catch (NumberFormatException e) {
+                throw new org.springframework.security.authentication.InsufficientAuthenticationException("Token inválido");
+            }
+        }
+
+        throw new org.springframework.security.authentication.InsufficientAuthenticationException("Token inválido");
     }
 }

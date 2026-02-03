@@ -22,28 +22,28 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                .csrf(csrf -> csrf.disable()) // (depois a gente melhora no refresh/cookie)
+                .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // auth sempre público
+                        // público
                         .requestMatchers("/api/auth/**").permitAll()
-
-                        // h2 console (dev)
-                        .requestMatchers("/h2/**").permitAll()
-
-                        // OPTIONS (preflight)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // resto protegido
-                        .requestMatchers("/api/**").authenticated()
+                        // dev
+                        .requestMatchers("/h2/**").permitAll()
 
-                        // se tiver algo fora de /api
-                        .anyRequest().permitAll()
+                        // protegido (IMPORTANTE)
+                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/summary/**").authenticated()
+
+                        // se cair aqui, também exige login (pra não ter endpoint solto por acidente)
+                        .anyRequest().authenticated()
                 )
-                .headers(h -> h.frameOptions(f -> f.disable())) // H2 console usa frame
+                .headers(h -> h.frameOptions(f -> f.disable()))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 }
+
