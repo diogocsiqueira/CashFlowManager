@@ -7,16 +7,21 @@ import com.diogodev.caixa.domain.enums.TransactionType;
 import com.diogodev.caixa.domain.model.FixedBill;
 import com.diogodev.caixa.domain.model.FixedBillPayment;
 import com.diogodev.caixa.domain.model.Transaction;
+import com.diogodev.caixa.domain.model.User;
 import com.diogodev.caixa.repository.FixedBillPaymentRepository;
 import com.diogodev.caixa.repository.FixedBillRepository;
 import com.diogodev.caixa.repository.TransactionRepository;
+import com.diogodev.caixa.repository.UserRepository;
+import com.diogodev.caixa.security.SecurityUtils;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,46 +30,69 @@ public class FixedBillService {
     private final FixedBillRepository fixedBillRepository;
     private final FixedBillPaymentRepository paymentRepository;
     private final TransactionRepository transactionRepository;
+    private final UserRepository userRepository;
 
     public FixedBillService(
             FixedBillRepository fixedBillRepository,
             FixedBillPaymentRepository paymentRepository,
-            TransactionRepository transactionRepository
+            TransactionRepository transactionRepository,
+            UserRepository userRepository
     ) {
         this.fixedBillRepository = fixedBillRepository;
         this.paymentRepository = paymentRepository;
         this.transactionRepository = transactionRepository;
+        this.userRepository = userRepository;
     }
 
+    // =========================
+    // Auth helpers
+    // =========================
+    private Long uid() {
+        return SecurityUtils.currentUserId();
+    }
+
+    private User currentUser() {
+        Long id = uid();
+        return userRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("Usuário do token não existe no banco"));
+    }
+
+    // =========================
+    // Queries
+    // =========================
     public List<FixedBillResponse> listActive() {
-        return fixedBillRepository.findByActiveTrueOrderByDueDayAscNameAsc()
+        Long userId = uid();
+
+        return fixedBillRepository
+                .findByUser_IdAndActiveTrueOrderByDueDayAscNameAsc(userId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
-    @Transactional
-    public FixedBillResponse create(FixedBillCreateRequest req) {
-        FixedBill bill = FixedBill.builder()
-                .name(req.name().trim())
-                .amount(req.amount())
-                .dueDay(req.dueDay())
-                .active(true)
-                .build();
-
-        return toResponse(fixedBillRepository.save(bill));
-    }
-
-    // Checklist do mês: junta FixedBill (cadastro) com Payment (status do mês)
+    /**
+     * Checklist do mês:
+     * - bills ativos do usuário
+     * - payments do mês do usuário
+     * - retorna "pago/nao pago" por bill
+     */
     public List<FixedBillChecklistItemResponse> checklist(YearMonth month) {
+        Long userId = uid();
 
-        List<FixedBill> bills = fixedBillRepository.findByActiveTrueOrderByDueDayAscNameAsc();
-        List<FixedBillPayment> payments = paymentRepository.findByMonth(month);
+        List<FixedBill> bills =
+                fixedBillRepository.findByUser_IdAndActiveTrueOrderByDueDayAscNameAsc(userId);
+
+        List<FixedBillPayment> payments =
+                paymentRepository.findByFixedBill_User_IdAndMonth(userId, month);
 
         Map<Long, FixedBillPayment> payByBillId = payments.stream()
-                .collect(Collectors.toMap(p -> p.getFixedBill().getId(), p -> p, (a, b) -> a));
+                .collect(Collectors.toMap(
+                        p -> p.getFixedBill().getId(),
+                        p -> p,
+                        (a, b) -> a
+                ));
 
-        List<FixedBillChecklistItemResponse> items = new ArrayList<>();
+        List<FixedBillChecklistItemResponse> items = new ArrayList<>(bills.size());
 
         for (FixedBill bill : bills) {
             FixedBillPayment p = payByBillId.get(bill.getId());
@@ -85,14 +113,40 @@ public class FixedBillService {
         return items;
     }
 
-    // Marcar como pago: cria Payment + cria Transaction EXPENSE vinculada
+    // =========================
+    // Commands
+    // =========================
+    @Transactional
+    public FixedBillResponse create(FixedBillCreateRequest req) {
+        User user = currentUser();
+
+        FixedBill bill = FixedBill.builder()
+                .user(user)
+                .name(req.name().trim())
+                .amount(req.amount())
+                .dueDay(req.dueDay())
+                .active(true)
+                .build();
+
+        return toResponse(fixedBillRepository.save(bill));
+    }
+
+    /**
+     * Marcar como pago:
+     * - garante bill pertence ao user
+     * - cria/atualiza payment do mês
+     * - cria Transaction EXPENSE do user e vincula pelo transactionId
+     */
     @Transactional
     public FixedBillChecklistItemResponse pay(YearMonth month, Long fixedBillId) {
+        Long userId = uid();
+        User user = currentUser();
 
-        FixedBill bill = fixedBillRepository.findById(fixedBillId)
-                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada: " + fixedBillId));
+        FixedBill bill = fixedBillRepository.findByIdAndUser_Id(fixedBillId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada"));
 
-        FixedBillPayment payment = paymentRepository.findByFixedBill_IdAndMonth(fixedBillId, month)
+        FixedBillPayment payment = paymentRepository
+                .findByFixedBill_IdAndFixedBill_User_IdAndMonth(fixedBillId, userId, month)
                 .orElse(null);
 
         if (payment != null && Boolean.TRUE.equals(payment.getPaid())) {
@@ -102,8 +156,9 @@ public class FixedBillService {
             );
         }
 
-        // cria transação de gasto
+        // cria transação do usuário (obrigatório, Transaction.user é NOT NULL)
         Transaction tx = Transaction.builder()
+                .user(user)
                 .type(TransactionType.EXPENSE)
                 .amount(bill.getAmount())
                 .date(LocalDate.now())
@@ -135,14 +190,21 @@ public class FixedBillService {
         );
     }
 
-    // Desmarcar: marca como não pago + apaga a Transaction vinculada
+    /**
+     * Desmarcar pagamento:
+     * - garante bill pertence ao user
+     * - se tinha transactionId, apaga a Transaction do user (seguro)
+     * - limpa payment
+     */
     @Transactional
     public FixedBillChecklistItemResponse unpay(YearMonth month, Long fixedBillId) {
+        Long userId = uid();
 
-        FixedBill bill = fixedBillRepository.findById(fixedBillId)
-                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada: " + fixedBillId));
+        FixedBill bill = fixedBillRepository.findByIdAndUser_Id(fixedBillId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada"));
 
-        FixedBillPayment payment = paymentRepository.findByFixedBill_IdAndMonth(fixedBillId, month)
+        FixedBillPayment payment = paymentRepository
+                .findByFixedBill_IdAndFixedBill_User_IdAndMonth(fixedBillId, userId, month)
                 .orElse(null);
 
         if (payment == null || !Boolean.TRUE.equals(payment.getPaid())) {
@@ -154,7 +216,8 @@ public class FixedBillService {
 
         Long txId = payment.getTransactionId();
         if (txId != null) {
-            transactionRepository.deleteById(txId);
+            // segurança: só apaga se a tx for do usuário logado
+            transactionRepository.deleteByIdAndUser_Id(txId, userId);
         }
 
         payment.setPaid(false);
@@ -168,7 +231,16 @@ public class FixedBillService {
         );
     }
 
+    // =========================
+    // Mapper
+    // =========================
     private FixedBillResponse toResponse(FixedBill b) {
-        return new FixedBillResponse(b.getId(), b.getName(), b.getAmount(), b.getDueDay(), b.getActive());
+        return new FixedBillResponse(
+                b.getId(),
+                b.getName(),
+                b.getAmount(),
+                b.getDueDay(),
+                b.getActive()
+        );
     }
 }

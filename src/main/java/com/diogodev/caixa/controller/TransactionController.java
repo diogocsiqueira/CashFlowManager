@@ -1,5 +1,6 @@
 package com.diogodev.caixa.controller;
 
+import com.diogodev.caixa.domain.dto.TransactionResponse;
 import com.diogodev.caixa.domain.model.Transaction;
 import com.diogodev.caixa.domain.dto.TransactionCreateRequest;
 import com.diogodev.caixa.service.TransactionService;
@@ -22,14 +23,16 @@ public class TransactionController {
 
     @PostMapping("/transactions")
     @ResponseStatus(HttpStatus.CREATED)
-    public Transaction create(@Valid @RequestBody TransactionCreateRequest request){
+    public TransactionResponse create(@Valid @RequestBody TransactionCreateRequest request){
         return transactionService.create(request);
     }
 
+
     @GetMapping("/transactions")
-    public List<Transaction> listByMonth(@RequestParam String month){
+    public List<TransactionResponse> listByMonth(@RequestParam String month){
         YearMonth ym = YearMonth.parse(month);
         return transactionService.findByMonth(ym);
     }
+
 
 }

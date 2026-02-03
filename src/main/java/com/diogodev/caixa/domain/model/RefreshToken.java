@@ -3,15 +3,14 @@ package com.diogodev.caixa.domain.model;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.math.BigDecimal;
+import java.time.Instant;
 
 @Entity
-@Table(name = "fixed_bills")
+@Table(name = "refresh_tokens")
 @Getter @Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@NoArgsConstructor @AllArgsConstructor
 @Builder
-public class FixedBill {
+public class RefreshToken {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,16 +20,17 @@ public class FixedBill {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false, length = 64)
+    private String tokenHash; // SHA-256 hex
+
+    @Column(nullable = false)
+    private Instant expiresAt;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean revoked = false;
 
     @Column(nullable = false, length = 60)
-    private String name;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal amount;
-
-    @Column(nullable = false)
-    private Integer dueDay; // 1..31
-
-    @Column(nullable = false)
-    private Boolean active;
+    @Builder.Default
+    private String deviceId = "web";
 }

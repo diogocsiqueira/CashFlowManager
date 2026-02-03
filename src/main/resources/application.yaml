@@ -3,8 +3,24 @@ spring:
     name: caixa
 
 server:
-  # Render define PORT (default 10000). Você só precisa respeitar. :contentReference[oaicite:1]{index=1}
   port: ${PORT:8080}
+
+# =========================
+# APP SETTINGS (GLOBAL)
+# =========================
+app:
+  jwt:
+    issuer: "caixa"
+    accessMinutes: 30
+    refreshDays: 14
+    # DEV fallback ok (pra não travar sua vida local)
+    secret: ${APP_JWT_SECRET:MUDE-ISSO-PRA-UM-SEGREDO-GIGANTE-EM-PROD}
+
+  cookies:
+    secure: ${APP_COOKIE_SECURE:false}
+    sameSite: ${APP_COOKIE_SAMESITE:Lax}
+    # deixa o cookie expirar junto do refresh token (em dias)
+    refreshMaxAgeDays: ${APP_COOKIE_REFRESH_MAXAGE_DAYS:14}
 
 # =========================
 # DEV (local) -> H2
@@ -45,8 +61,6 @@ spring:
       on-profile: prod
 
   datasource:
-    # Você vai setar isso no Render como env var.
-    # IMPORTANTE: Neon exige SSL -> sslmode=require :contentReference[oaicite:2]{index=2}
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
@@ -60,3 +74,12 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# PROD overrides: sem fallback no secret (se faltar, app não sobe)
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET}
+  cookies:
+    secure: true
+    sameSite: None
+    refreshMaxAgeDays: 14
