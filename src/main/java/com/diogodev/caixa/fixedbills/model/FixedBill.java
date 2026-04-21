@@ -1,5 +1,6 @@
 package com.diogodev.caixa.fixedbills.model;
 
+import com.diogodev.caixa.category.domain.model.Category;
 import com.diogodev.caixa.core.user.domain.model.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -22,7 +23,6 @@ public class FixedBill {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-
     @Column(nullable = false, length = 60)
     private String name;
 
@@ -31,6 +31,10 @@ public class FixedBill {
 
     @Column(nullable = false)
     private Integer dueDay; // 1..31
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
 
     @Column(nullable = false)
     private Boolean active;

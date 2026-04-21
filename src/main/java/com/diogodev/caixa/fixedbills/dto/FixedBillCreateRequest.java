@@ -11,5 +11,6 @@ import java.math.BigDecimal;
 public record FixedBillCreateRequest(
         @NotBlank String name,
         @NotNull @Positive BigDecimal amount,
-        @NotNull @Min(1) @Max(31) Integer dueDay
+        @NotNull @Min(1) @Max(31) Integer dueDay,
+        Long categoryId
 ) {}

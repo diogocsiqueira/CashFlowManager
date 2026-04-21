@@ -10,6 +10,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     List<Transaction> findByUser_IdAndDateBetweenOrderByDateDesc(Long userId, LocalDate start, LocalDate end);
 
-    void deleteByIdAndUser_Id(Long id, Long userId);
-}
+    java.util.Optional<Transaction> findByIdAndUser_Id(Long id, Long userId);
 
+    void deleteByIdAndUser_Id(Long id, Long userId);
+
+    boolean existsByUser_IdAndCategory_Id(Long userId, Long categoryId);
+}

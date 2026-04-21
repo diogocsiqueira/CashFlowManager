@@ -1,21 +1,26 @@
 package com.diogodev.caixa.fixedbills.service;
 
+import com.diogodev.caixa.category.domain.model.Category;
+import com.diogodev.caixa.category.service.CategoryService;
+import com.diogodev.caixa.core.user.domain.model.User;
+import com.diogodev.caixa.core.user.repository.UserRepository;
 import com.diogodev.caixa.fixedbills.dto.FixedBillChecklistItemResponse;
 import com.diogodev.caixa.fixedbills.dto.FixedBillCreateRequest;
+import com.diogodev.caixa.fixedbills.dto.FixedBillPayRequest;
 import com.diogodev.caixa.fixedbills.dto.FixedBillResponse;
-import com.diogodev.caixa.transaction.domain.enuns.TransactionType;
 import com.diogodev.caixa.fixedbills.model.FixedBill;
 import com.diogodev.caixa.fixedbills.model.FixedBillPayment;
-import com.diogodev.caixa.transaction.domain.model.Transaction;
-import com.diogodev.caixa.core.user.domain.model.User;
 import com.diogodev.caixa.fixedbills.repository.FixedBillPaymentRepository;
 import com.diogodev.caixa.fixedbills.repository.FixedBillRepository;
-import com.diogodev.caixa.transaction.repository.TransactionRepository;
-import com.diogodev.caixa.core.user.repository.UserRepository;
 import com.diogodev.caixa.shared.security.SecurityUtils;
-import jakarta.transaction.Transactional;
+import com.diogodev.caixa.transaction.domain.enuns.TransactionType;
+import com.diogodev.caixa.transaction.dto.TransactionCreateRequest;
+import com.diogodev.caixa.transaction.dto.TransactionResponse;
+import com.diogodev.caixa.transaction.service.TransactionService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -29,24 +34,22 @@ public class FixedBillService {
 
     private final FixedBillRepository fixedBillRepository;
     private final FixedBillPaymentRepository paymentRepository;
-    private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final CategoryService categoryService;
+    private final TransactionService transactionService;
 
-    public FixedBillService(
-            FixedBillRepository fixedBillRepository,
-            FixedBillPaymentRepository paymentRepository,
-            TransactionRepository transactionRepository,
-            UserRepository userRepository
-    ) {
+    public FixedBillService(FixedBillRepository fixedBillRepository,
+                            FixedBillPaymentRepository paymentRepository,
+                            UserRepository userRepository,
+                            CategoryService categoryService,
+                            TransactionService transactionService) {
         this.fixedBillRepository = fixedBillRepository;
         this.paymentRepository = paymentRepository;
-        this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
+        this.categoryService = categoryService;
+        this.transactionService = transactionService;
     }
 
-    // =========================
-    // Auth helpers
-    // =========================
     private Long uid() {
         return SecurityUtils.currentUserId();
     }
@@ -57,9 +60,7 @@ public class FixedBillService {
                 .orElseThrow(() -> new IllegalStateException("Usuário do token não existe no banco"));
     }
 
-    // =========================
-    // Queries
-    // =========================
+    @Transactional(readOnly = true)
     public List<FixedBillResponse> listActive() {
         Long userId = uid();
 
@@ -70,12 +71,7 @@ public class FixedBillService {
                 .toList();
     }
 
-    /**
-     * Checklist do mês:
-     * - bills ativos do usuário
-     * - payments do mês do usuário
-     * - retorna "pago/nao pago" por bill
-     */
+    @Transactional(readOnly = true)
     public List<FixedBillChecklistItemResponse> checklist(YearMonth month) {
         Long userId = uid();
 
@@ -96,51 +92,36 @@ public class FixedBillService {
 
         for (FixedBill bill : bills) {
             FixedBillPayment p = payByBillId.get(bill.getId());
-
             boolean paid = p != null && Boolean.TRUE.equals(p.getPaid());
+            BigDecimal amount = (p != null && p.getAmount() != null) ? p.getAmount() : bill.getAmount();
             LocalDateTime paidAt = (p != null) ? p.getPaidAt() : null;
 
-            items.add(new FixedBillChecklistItemResponse(
-                    bill.getId(),
-                    bill.getName(),
-                    bill.getAmount(),
-                    bill.getDueDay(),
-                    paid,
-                    paidAt
-            ));
+            items.add(toChecklistItem(bill, amount, paid, paidAt));
         }
 
         return items;
     }
 
-    // =========================
-    // Commands
-    // =========================
     @Transactional
     public FixedBillResponse create(FixedBillCreateRequest req) {
         User user = currentUser();
+        Category category = categoryService.resolveCategoryForCurrentUser(req.categoryId());
 
         FixedBill bill = FixedBill.builder()
                 .user(user)
-                .name(req.name().trim())
-                .amount(req.amount())
-                .dueDay(req.dueDay())
+                .name(normalizeName(req.name()))
+                .amount(normalizeAmount(req.amount()))
+                .dueDay(normalizeDueDay(req.dueDay()))
+                .category(category)
                 .active(true)
                 .build();
 
         return toResponse(fixedBillRepository.save(bill));
     }
 
-    /**
-     * Marcar como pago:
-     * - garante bill pertence ao user
-     * - cria/atualiza payment do mês
-     * - cria Transaction EXPENSE do user e vincula pelo transactionId
-     */
     @Transactional
-    public FixedBillChecklistItemResponse pay(YearMonth month, Long fixedBillId) {
+    public FixedBillChecklistItemResponse pay(YearMonth month, Long fixedBillId, FixedBillPayRequest request) {
         Long userId = uid();
-        User user = currentUser();
 
         FixedBill bill = fixedBillRepository.findByIdAndUser_Id(fixedBillId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada"));
@@ -150,52 +131,42 @@ public class FixedBillService {
                 .orElse(null);
 
         if (payment != null && Boolean.TRUE.equals(payment.getPaid())) {
-            return new FixedBillChecklistItemResponse(
-                    bill.getId(), bill.getName(), bill.getAmount(), bill.getDueDay(),
-                    true, payment.getPaidAt()
-            );
+            return toChecklistItem(bill, payment.getAmount(), true, payment.getPaidAt());
         }
 
-        // cria transação do usuário (obrigatório, Transaction.user é NOT NULL)
-        Transaction tx = Transaction.builder()
-                .user(user)
-                .type(TransactionType.EXPENSE)
-                .amount(bill.getAmount())
-                .date(LocalDate.now())
-                .category("CONTA_FIXA")
-                .description("Conta fixa: " + bill.getName())
-                .build();
+        BigDecimal paymentAmount = resolvePaymentAmount(bill, request);
+        LocalDate paymentDate = resolvePaymentDate(month, bill.getDueDay());
 
-        tx = transactionRepository.save(tx);
+        TransactionResponse transaction = transactionService.create(new TransactionCreateRequest(
+                "Pagamento conta fixa: " + bill.getName(),
+                TransactionType.EXPENSE,
+                paymentAmount,
+                paymentDate,
+                bill.getCategory() != null ? bill.getCategory().getId() : null,
+                "Conta fixa: " + bill.getName()
+        ));
 
         if (payment == null) {
             payment = FixedBillPayment.builder()
                     .fixedBill(bill)
                     .month(month)
                     .paid(true)
+                    .amount(paymentAmount)
                     .paidAt(LocalDateTime.now())
-                    .transactionId(tx.getId())
+                    .transactionId(transaction.id())
                     .build();
         } else {
             payment.setPaid(true);
+            payment.setAmount(paymentAmount);
             payment.setPaidAt(LocalDateTime.now());
-            payment.setTransactionId(tx.getId());
+            payment.setTransactionId(transaction.id());
         }
 
         paymentRepository.save(payment);
 
-        return new FixedBillChecklistItemResponse(
-                bill.getId(), bill.getName(), bill.getAmount(), bill.getDueDay(),
-                true, payment.getPaidAt()
-        );
+        return toChecklistItem(bill, paymentAmount, true, payment.getPaidAt());
     }
 
-    /**
-     * Desmarcar pagamento:
-     * - garante bill pertence ao user
-     * - se tinha transactionId, apaga a Transaction do user (seguro)
-     * - limpa payment
-     */
     @Transactional
     public FixedBillChecklistItemResponse unpay(YearMonth month, Long fixedBillId) {
         Long userId = uid();
@@ -208,39 +179,88 @@ public class FixedBillService {
                 .orElse(null);
 
         if (payment == null || !Boolean.TRUE.equals(payment.getPaid())) {
-            return new FixedBillChecklistItemResponse(
-                    bill.getId(), bill.getName(), bill.getAmount(), bill.getDueDay(),
-                    false, null
-            );
+            return toChecklistItem(bill, bill.getAmount(), false, null);
         }
 
         Long txId = payment.getTransactionId();
         if (txId != null) {
-            // segurança: só apaga se a tx for do usuário logado
-            transactionRepository.deleteByIdAndUser_Id(txId, userId);
+            transactionService.delete(txId);
         }
 
         payment.setPaid(false);
+        payment.setAmount(null);
         payment.setPaidAt(null);
         payment.setTransactionId(null);
         paymentRepository.save(payment);
 
+        return toChecklistItem(bill, bill.getAmount(), false, null);
+    }
+
+    private BigDecimal resolvePaymentAmount(FixedBill bill, FixedBillPayRequest request) {
+        if (request == null || request.amount() == null) {
+            return bill.getAmount();
+        }
+
+        return normalizeAmount(request.amount());
+    }
+
+    private LocalDate resolvePaymentDate(YearMonth month, Integer dueDay) {
+        int safeDay = Math.min(dueDay, month.lengthOfMonth());
+        return month.atDay(safeDay);
+    }
+
+    private FixedBillChecklistItemResponse toChecklistItem(FixedBill bill,
+                                                           BigDecimal amount,
+                                                           boolean paid,
+                                                           LocalDateTime paidAt) {
         return new FixedBillChecklistItemResponse(
-                bill.getId(), bill.getName(), bill.getAmount(), bill.getDueDay(),
-                false, null
+                bill.getId(),
+                bill.getName(),
+                amount,
+                bill.getAmount(),
+                bill.getDueDay(),
+                paid,
+                paidAt
         );
     }
 
-    // =========================
-    // Mapper
-    // =========================
     private FixedBillResponse toResponse(FixedBill b) {
         return new FixedBillResponse(
                 b.getId(),
                 b.getName(),
                 b.getAmount(),
                 b.getDueDay(),
+                b.getCategory() != null ? b.getCategory().getId() : null,
+                b.getCategory() != null ? b.getCategory().getName() : null,
                 b.getActive()
         );
+    }
+
+    private String normalizeName(String name) {
+        String normalized = name == null ? "" : name.trim();
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("Nome da conta fixa é obrigatório");
+        }
+        return normalized;
+    }
+
+    private BigDecimal normalizeAmount(BigDecimal amount) {
+        if (amount == null) {
+            throw new IllegalArgumentException("Valor é obrigatório");
+        }
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("Valor deve ser maior que zero");
+        }
+        return amount;
+    }
+
+    private Integer normalizeDueDay(Integer dueDay) {
+        if (dueDay == null) {
+            throw new IllegalArgumentException("Dia de vencimento é obrigatório");
+        }
+        if (dueDay < 1 || dueDay > 31) {
+            throw new IllegalArgumentException("Dia de vencimento deve estar entre 1 e 31");
+        }
+        return dueDay;
     }
 }

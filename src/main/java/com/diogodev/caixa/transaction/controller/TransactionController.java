@@ -2,6 +2,7 @@ package com.diogodev.caixa.transaction.controller;
 
 import com.diogodev.caixa.transaction.dto.TransactionResponse;
 import com.diogodev.caixa.transaction.dto.TransactionCreateRequest;
+import com.diogodev.caixa.transaction.dto.TransactionUpdateRequest;
 import com.diogodev.caixa.transaction.service.TransactionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -33,5 +34,16 @@ public class TransactionController {
         return transactionService.findByMonth(ym);
     }
 
+    @PutMapping("/transactions/{id}")
+    public TransactionResponse update(@PathVariable Long id,
+                                      @Valid @RequestBody TransactionUpdateRequest request) {
+        return transactionService.update(id, request);
+    }
+
+    @DeleteMapping("/transactions/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        transactionService.delete(id);
+    }
 
 }

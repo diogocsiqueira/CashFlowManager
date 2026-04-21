@@ -1,7 +1,9 @@
 package com.diogodev.caixa.fixedbills.controller;
 
 import com.diogodev.caixa.fixedbills.dto.FixedBillChecklistItemResponse;
+import com.diogodev.caixa.fixedbills.dto.FixedBillPayRequest;
 import com.diogodev.caixa.fixedbills.service.FixedBillService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
@@ -19,14 +21,16 @@ public class FixedBillMonthController {
 
     @GetMapping
     public List<FixedBillChecklistItemResponse> checklist(@PathVariable String month) {
-        YearMonth ym = YearMonth.parse(month); // "2026-02"
+        YearMonth ym = YearMonth.parse(month);
         return fixedBillService.checklist(ym);
     }
 
     @PostMapping("/{billId}/pay")
-    public FixedBillChecklistItemResponse pay(@PathVariable String month, @PathVariable Long billId) {
+    public FixedBillChecklistItemResponse pay(@PathVariable String month,
+                                              @PathVariable Long billId,
+                                              @Valid @RequestBody(required = false) FixedBillPayRequest request) {
         YearMonth ym = YearMonth.parse(month);
-        return fixedBillService.pay(ym, billId);
+        return fixedBillService.pay(ym, billId, request);
     }
 
     @PostMapping("/{billId}/unpay")

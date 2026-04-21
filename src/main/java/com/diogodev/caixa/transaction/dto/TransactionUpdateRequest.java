@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record TransactionCreateRequest(
+public record TransactionUpdateRequest(
 
         @NotBlank(message = "Nome da transação é obrigatório")
         @Size(max = 120, message = "Nome da transação deve ter no máximo 120 caracteres")

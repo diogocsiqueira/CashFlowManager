@@ -7,5 +7,7 @@ public record FixedBillResponse(
         String name,
         BigDecimal amount,
         Integer dueDay,
+        Long categoryId,
+        String categoryName,
         Boolean active
 ) {}
