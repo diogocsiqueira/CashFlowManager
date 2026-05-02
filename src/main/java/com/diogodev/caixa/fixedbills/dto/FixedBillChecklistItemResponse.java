@@ -9,6 +9,8 @@ public record FixedBillChecklistItemResponse(
         BigDecimal amount,
         BigDecimal defaultAmount,
         Integer dueDay,
+        Long categoryId,
+        String categoryName,
         Boolean paid,
         LocalDateTime paidAt
 ) {}

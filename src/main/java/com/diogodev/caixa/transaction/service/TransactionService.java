@@ -133,17 +133,27 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public MonthSummaryResponse calculateBalance(YearMonth month) {
-        List<TransactionResponse> transactions = findByMonth(month);
 
-        BigDecimal income = transactions.stream()
-                .filter(t -> t.type() == TransactionType.INCOME)
-                .map(TransactionResponse::amount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Long userId = uid();
 
-        BigDecimal expense = transactions.stream()
-                .filter(t -> t.type() == TransactionType.EXPENSE)
-                .map(TransactionResponse::amount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        LocalDate start = month.atDay(1);
+        LocalDate end = month.atEndOfMonth();
+
+        BigDecimal income = transactionRepository.sumByType(
+                userId,
+                TransactionType.INCOME,
+                start,
+                end,
+                null
+        );
+
+        BigDecimal expense = transactionRepository.sumByType(
+                userId,
+                TransactionType.EXPENSE,
+                start,
+                end,
+                null
+        );
 
         BigDecimal balance = income.subtract(expense);
 

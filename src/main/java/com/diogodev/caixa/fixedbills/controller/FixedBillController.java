@@ -29,4 +29,16 @@ public class FixedBillController {
     public FixedBillResponse create(@Valid @RequestBody FixedBillCreateRequest req) {
         return fixedBillService.create(req);
     }
+
+    @PutMapping("/{id}")
+    public FixedBillResponse update(@PathVariable Long id,
+                                    @Valid @RequestBody FixedBillCreateRequest req) {
+        return fixedBillService.update(id, req);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        fixedBillService.delete(id);
+    }
 }

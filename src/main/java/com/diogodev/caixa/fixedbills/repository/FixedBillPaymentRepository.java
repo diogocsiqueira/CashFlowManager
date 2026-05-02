@@ -11,6 +11,9 @@ public interface FixedBillPaymentRepository extends JpaRepository<FixedBillPayme
 
     List<FixedBillPayment> findByFixedBill_User_IdAndMonth(Long userId, YearMonth month);
 
-    Optional<FixedBillPayment> findByFixedBill_IdAndFixedBill_User_IdAndMonth(Long billId, Long userId, YearMonth month);
+    Optional<FixedBillPayment> findByFixedBill_IdAndFixedBill_User_IdAndMonth(
+            Long billId,
+            Long userId,
+            YearMonth month
+    );
 }
-

@@ -187,13 +187,38 @@ public class FixedBillService {
             transactionService.delete(txId);
         }
 
-        payment.setPaid(false);
-        payment.setAmount(null);
-        payment.setPaidAt(null);
-        payment.setTransactionId(null);
-        paymentRepository.save(payment);
+        paymentRepository.delete(payment);
 
         return toChecklistItem(bill, bill.getAmount(), false, null);
+    }
+
+    @Transactional
+    public FixedBillResponse update(Long id, FixedBillCreateRequest req) {
+        Long userId = uid();
+
+        FixedBill bill = fixedBillRepository.findByIdAndUser_Id(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada"));
+
+        Category category = categoryService.resolveCategoryForCurrentUser(req.categoryId());
+
+        bill.setName(normalizeName(req.name()));
+        bill.setAmount(normalizeAmount(req.amount()));
+        bill.setDueDay(normalizeDueDay(req.dueDay()));
+        bill.setCategory(category);
+
+        return toResponse(fixedBillRepository.save(bill));
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Long userId = uid();
+
+        FixedBill bill = fixedBillRepository.findByIdAndUser_Id(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta fixa não encontrada"));
+
+        bill.setActive(false);
+
+        fixedBillRepository.save(bill);
     }
 
     private BigDecimal resolvePaymentAmount(FixedBill bill, FixedBillPayRequest request) {
@@ -219,6 +244,8 @@ public class FixedBillService {
                 amount,
                 bill.getAmount(),
                 bill.getDueDay(),
+                bill.getCategory() != null ? bill.getCategory().getId() : null,
+                bill.getCategory() != null ? bill.getCategory().getName() : null,
                 paid,
                 paidAt
         );
