@@ -36,6 +36,13 @@ public class SecurityConfig {
                         // OPTIONS (preflight)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+                        //Swagger
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
                         // resto protegido
                         .requestMatchers("/api/**").authenticated()
 
