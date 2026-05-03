@@ -1,5 +1,6 @@
-package com.diogodev.caixa.shared.security;
+package com.diogodev.caixa.shared.config;
 
+import com.diogodev.caixa.shared.security.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

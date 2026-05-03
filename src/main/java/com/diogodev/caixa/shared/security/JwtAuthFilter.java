@@ -28,7 +28,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
+        String path = req.getServletPath();
+
+        // Rotas de autenticação são públicas e não devem validar access token
+        if (path.startsWith("/api/auth/")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
         String auth = req.getHeader("Authorization");
+
         if (auth == null || !auth.startsWith("Bearer ")) {
             chain.doFilter(req, res);
             return;
@@ -38,9 +47,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = jwtService.parseClaims(token);
-            String email = claims.get("email", String.class);
 
             Object rolesObj = claims.get("roles");
+
             Set<String> roles = (rolesObj instanceof Collection<?> col)
                     ? col.stream().map(String::valueOf).collect(Collectors.toSet())
                     : Set.of();
@@ -50,12 +59,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .collect(Collectors.toSet());
 
             Long userId = Long.valueOf(claims.getSubject());
-            var authToken = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+
+            var authToken = new UsernamePasswordAuthenticationToken(
+                    userId,
+                    null,
+                    authorities
+            );
 
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
         } catch (Exception e) {
-            // token inválido: só não autentica
             SecurityContextHolder.clearContext();
         }
 

@@ -8,6 +8,7 @@ import com.diogodev.caixa.auth.domain.model.RefreshToken;
 import com.diogodev.caixa.core.user.domain.model.User;
 import com.diogodev.caixa.auth.repository.RefreshTokenRepository;
 import com.diogodev.caixa.core.user.repository.UserRepository;
+import com.diogodev.caixa.shared.exception.UnauthorizedException;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class AuthService {
 
     public void register(AuthRegisterRequest req) {
         String email = req.email().trim().toLowerCase();
+
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("Email já cadastrado");
         }
@@ -43,6 +45,7 @@ public class AuthService {
                 .passwordHash(passwordEncoder.encode(req.password()))
                 .enabled(true)
                 .build();
+
         u.getRoles().add(Role.USER);
 
         userRepository.save(u);
@@ -50,12 +53,14 @@ public class AuthService {
 
     public AuthResponse login(AuthLoginRequest req, CookieWriter cookieWriter) {
         User user = userRepository.findByEmailIgnoreCase(req.email().trim())
-                .orElseThrow(() -> new IllegalArgumentException("Credenciais inválidas"));
+                .orElseThrow(() -> new UnauthorizedException("Credenciais inválidas"));
 
-        if (!user.isEnabled()) throw new IllegalArgumentException("Usuário desativado");
+        if (!user.isEnabled()) {
+            throw new UnauthorizedException("Usuário desativado");
+        }
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("Credenciais inválidas");
+            throw new UnauthorizedException("Credenciais inválidas");
         }
 
         String access = tokenService.generateAccessToken(user);
@@ -69,27 +74,26 @@ public class AuthService {
     @Transactional
     public AuthResponse refresh(String refreshRaw, CookieWriter cookieWriter) {
         if (refreshRaw == null || refreshRaw.isBlank()) {
-            throw new IllegalArgumentException("Sem refresh token");
+            throw new UnauthorizedException("Sem refresh token");
         }
 
         String hash = tokenService.sha256Hex(refreshRaw);
 
         RefreshToken rt = refreshTokenRepository.findValidWithUserAndRoles(hash)
-                .orElseThrow(() -> new IllegalArgumentException("Refresh inválido"));
-
+                .orElseThrow(() -> new UnauthorizedException("Refresh inválido"));
 
         if (rt.getExpiresAt().isBefore(Instant.now())) {
             rt.setRevoked(true);
             refreshTokenRepository.save(rt);
-            throw new IllegalArgumentException("Refresh expirado");
+            cookieWriter.clearRefreshCookie();
+
+            throw new UnauthorizedException("Refresh expirado");
         }
 
         User user = rt.getUser();
 
-        // MVP: mantém o refresh atual (sem rotação)
-        // Melhor: rotacionar (revoga rt e cria outro). A gente faz depois se quiser.
-
         String access = tokenService.generateAccessToken(user);
+
         return new AuthResponse(access);
     }
 
@@ -99,6 +103,7 @@ public class AuthService {
         if (refreshRaw == null || refreshRaw.isBlank()) return;
 
         String hash = tokenService.sha256Hex(refreshRaw);
+
         refreshTokenRepository.findByTokenHashAndRevokedFalse(hash).ifPresent(rt -> {
             rt.setRevoked(true);
             refreshTokenRepository.save(rt);
