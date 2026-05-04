@@ -28,7 +28,17 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // auth sempre público
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/refresh",
+                                "/api/auth/logout",
+                                "/api/mobile/auth/login",
+                                "/api/mobile/auth/refresh",
+                                "/api/mobile/auth/logout"
+                        ).permitAll()
+
+                        .requestMatchers("/api/auth/me").authenticated()
 
                         // h2 console (dev)
                         .requestMatchers("/h2/**").permitAll()

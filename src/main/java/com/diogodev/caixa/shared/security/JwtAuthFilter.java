@@ -25,13 +25,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest req,
+            HttpServletResponse res,
+            FilterChain chain
+    ) throws ServletException, IOException {
 
         String path = req.getServletPath();
 
-        // Rotas de autenticação são públicas e não devem validar access token
-        if (path.startsWith("/api/auth/")) {
+        boolean publicAuthRoute =
+                path.equals("/api/auth/login") ||
+                        path.equals("/api/auth/register") ||
+                        path.equals("/api/auth/refresh") ||
+                        path.equals("/api/auth/logout") ||
+                        path.equals("/api/mobile/auth/login") ||
+                        path.equals("/api/mobile/auth/refresh") ||
+                        path.equals("/api/mobile/auth/logout");
+
+        if (publicAuthRoute) {
             chain.doFilter(req, res);
             return;
         }
@@ -55,7 +66,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     : Set.of();
 
             var authorities = roles.stream()
-                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                     .collect(Collectors.toSet());
 
             Long userId = Long.valueOf(claims.getSubject());
@@ -70,6 +81,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
             SecurityContextHolder.clearContext();
+
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.setContentType("application/json;charset=UTF-8");
+            res.getWriter().write("""
+        {
+          "error": "Não autenticado",
+          "message": "Token inválido ou expirado"
+        }
+    """);
+
+            return;
         }
 
         chain.doFilter(req, res);

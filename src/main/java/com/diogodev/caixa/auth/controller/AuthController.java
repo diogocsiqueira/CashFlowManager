@@ -1,6 +1,7 @@
 package com.diogodev.caixa.auth.controller;
 
 import com.diogodev.caixa.auth.dto.AuthLoginRequest;
+import com.diogodev.caixa.auth.dto.AuthMeResponse;
 import com.diogodev.caixa.auth.dto.AuthRegisterRequest;
 import com.diogodev.caixa.auth.dto.AuthResponse;
 import com.diogodev.caixa.auth.service.AuthService;
@@ -10,6 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.diogodev.caixa.core.user.domain.model.User;
+import com.diogodev.caixa.shared.exception.UnauthorizedException;
+import org.springframework.security.core.Authentication;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -48,6 +53,17 @@ public class AuthController {
     ) {
         AuthResponse out = authService.login(req, cookieWriter(res));
         return ResponseEntity.ok(out);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<AuthMeResponse> me(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedException("Usuário não autenticado");
+        }
+
+        User user = authService.loadUserByPrincipalName(authentication.getName());
+
+        return ResponseEntity.ok(authService.me(user));
     }
 
     @PostMapping("/refresh")
